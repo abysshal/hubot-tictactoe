@@ -1,0 +1,24 @@
+{
+  "name": "hubot-tictactoe",
+  "version": "0.0.1",
+  "description": "A Tic-Tac-Toe Game Enigne for Hubot",
+  "main": "index.coffee",
+  "scripts": {
+    "test": "script/test"
+  },
+  "keywords": [
+    "hubot",
+    "hubot-scripts"
+  ],
+  "dependencies": {
+    "coffee-script": "~1.6"
+  },
+  "devDependencies": {
+    "mocha": "*",
+    "chai": "*",
+    "sinon-chai": "*",
+    "sinon": "*"
+  },
+  "author": "Hui",
+  "license": "MIT"
+}
