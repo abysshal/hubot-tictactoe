@@ -2,10 +2,7 @@
 #   A Tic-Tac-Toe Game Engine for Hubot
 #
 # Commands:
-#   hubot ttt start - Start a game of Tic-Tac-Toe
-#   hubot ttt <number> - Mark the Cell
-#   hubot ttt restart - Restart the current game of Tic-Tac-Toe
-#   hubot ttt stop - Stop the current game of Tic-Tac-Toe
+#   hubot ttt help - Show help of the TicTacToe game
 #
 # Notes:
 #   Number Commands:
@@ -32,6 +29,13 @@ GameManager = (size, renderer) ->
   @size = size
   @renderer = renderer
   @setup()
+  return
+
+Room = (name, creator) ->
+  @name = name
+  @creator = creator
+  @opponent = null
+  @game = null
   return
 
 Grid::build = ->
@@ -152,6 +156,9 @@ GameManager::setup = ->
 GameManager::getRenderer = ->
   return @renderer
 
+GameManager::isNextFirstHand = ->
+    return @nextX
+
 GameManager::isGameTerminated = ->
   if @over or @won
     true
@@ -168,6 +175,7 @@ GameManager::actuate = ->
 
 GameManager::mark = (position,msg) ->
   self = this
+  @renderer.setMsg(msg)
   if @isGameTerminated()
       msg.send "Game is OVER! Please restart."
       return
@@ -225,8 +233,46 @@ Renderer::render = (grid, metadata) ->
   else
     self.msg.send "Next: O"
 
+Room::getCreator = ->
+    return @creator
 
-gameManagerKey = 'TTTGameManager'
+Room::getOpponent = ->
+    return @opponent
+
+Room::getGame = ->
+    return @game
+
+Room::startWithOpponent = (msg, opponent) ->
+    @opponent = opponent
+    hubotRenderer = new Renderer()
+    hubotRenderer.setMsg msg
+    @game = new GameManager(3, hubotRenderer)
+
+Room::mark = (position, msg) ->
+    name = getUserName(msg)
+    if (name == @creator and @game.isNextFirstHand()) or (name == @opponent and not @game.isNextFirstHand())
+        @game.mark(position, msg)
+        return
+
+    if name == @creator
+        othername = @opponent
+    else
+        othername = @creator
+
+    msg.send "It's not your turn! Please wait for #{othername} `s move"
+    return
+
+getGameKey = (msg) ->
+    return "TTTGame" + getUserName(msg)
+
+getRoomKey = (name) ->
+    return "TTTRoom" + name
+
+getRoomGameKey = (name) ->
+    return "TTTRoomGame" + name
+
+getBotGameKey = (msg) ->
+    return "TTTBotGame" + getUserName(msg)
 
 getUserName = (msg) ->
   if msg.message.user.mention_name?
@@ -236,64 +282,138 @@ getUserName = (msg) ->
 
 sendHelp = (robot, msg) ->
   prefix = robot.alias or robot.name
-  msg.send "Start Game: #{prefix} ttt start"
-  msg.send "Mark Cell: #{prefix} ttt {number}"
-  msg.send "Numbers: 1 2 3"
-  msg.send "Numbers: 4 5 6"
-  msg.send "Numbers: 7 8 9"
-  msg.send "Restart Game: #{prefix} ttt restart"
-  msg.send "Stop Game: #{prefix} ttt stop"
+  msg.send "===Help for ttt, a Tic-Tac-Toe Game==="
+  msg.send "#{prefix} ttt me start - Start a game of Tic-Tac-Toe VS #{getUserName(msg)}"
+  msg.send "#{prefix} ttt me <number> - Mark the Cell"
+  msg.send "#{prefix} ttt me restart - Restart the current game of Tic-Tac-Toe"
+  msg.send "#{prefix} ttt me stop - Stop the current game of Tic-Tac-Toe"
+  msg.send "#{prefix} ttt room create <name> - Create a Game Room & wait for the opponent"
+  msg.send "#{prefix} ttt room join <name> - Join a Game Room & start the game"
+  msg.send "#{prefix} ttt room <number> - Mark the Cell"
+  msg.send "#{prefix} ttt room stop - Stop the current game of Tic-Tac-Toe"
+  msg.send "#{prefix} ttt bot start - Start a game of Tic-Tac-Toe VS #{prefix}"
+  msg.send "#{prefix} ttt bot <number> - Mark the Cell"
+  msg.send "#{prefix} ttt bot restart - Restart the current game of Tic-Tac-Toe"
+  msg.send "#{prefix} ttt bot stop - Stop the current game of Tic-Tac-Toe"
+  msg.send "Number: 1 2 3"
+  msg.send "Number: 4 5 6"
+  msg.send "Number: 7 8 9"
+  msg.send "Name:[a-zA-Z0-9]+"
+  msg.send "===END==="
+
 
 module.exports = (robot) ->
-  robot.respond /ttt start/i, (msg) ->
-    gameManager = robot.brain.get(gameManagerKey)
+
+  robot.respond /ttt help/i, (msg) ->
+    sendHelp robot, msg
+
+  robot.respond /ttt me start/i, (msg) ->
+    gameManager = robot.brain.get(getGameKey(msg))
 
     unless gameManager?
-      msg.send "#{getUserName(msg)} has started a game of Tic-Tac-Toe."
+      msg.send "#{getUserName(msg)} has started a game of Tic-Tac-Toe VS #{getUserName(msg)}"
       hubotRenderer = new Renderer()
       hubotRenderer.setMsg msg
       gameManager = new GameManager(3, hubotRenderer)
-      robot.brain.set(gameManagerKey, gameManager)
+      robot.brain.set(getGameKey(msg), gameManager)
       robot.brain.save()
     else
       msg.send "Tic-Tac-Toe game already in progress."
       sendHelp robot, msg
 
-  robot.respond /ttt help/i, (msg) ->
-    sendHelp robot, msg
-
-  robot.respond /ttt ([1-9])/i, (msg) ->
+  robot.respond /ttt me ([1-9])/i, (msg) ->
 
     cellNum = parseInt(msg.match[1],10)
-    #msg.send "Parsed Number #{cellNum}"
     position =
          x: Math.floor((cellNum - 1) / 3)
          y: (cellNum - 1) % 3
 
-#    msg.send "x:#{position.x}, y:#{position.y}"
-
-    gameManager = robot.brain.get(gameManagerKey)
+    gameManager = robot.brain.get(getGameKey(msg))
     unless gameManager?
       msg.send "No Tic-Tac-Toe game in progress."
       sendHelp robot, msg
       return
 
-    hubotRenderer = gameManager.getRenderer()
-    hubotRenderer.setMsg msg
-    gameManager.mark(position,msg)
+    gameManager.mark(position, msg)
 
-  robot.respond /ttt restart/i, (msg) ->
-    gameManager = robot.brain.get(gameManagerKey)
+  robot.respond /ttt me restart/i, (msg) ->
+    gameManager = robot.brain.get(getGameKey(msg))
     unless gameManager?
       msg.send "No Tic-Tac-Toe game in progress."
       sendHelp robot, msg
       return
 
-    msg.send "#{getUserName(msg)} has started a game of Tic-Tac-Toe."
+    msg.send "#{getUserName(msg)} has started a game of Tic-Tac-Toe VS #{getUserName(msg)}"
     gameManager.setup()
 
-  robot.respond /ttt stop/i, (msg) ->
-    robot.brain.set(gameManagerKey, null)
+  robot.respond /ttt me stop/i, (msg) ->
+    robot.brain.set(getGameKey(msg), null)
     robot.brain.save()
 
     msg.send "#{getUserName(msg)} has stopped a game of Tic-Tac-Toe."
+
+  robot.respond /ttt room create ([a-zA-Z0-9]+)/i, (msg) ->
+      name = msg.match[1]
+      roomkey = getRoomKey(name)
+      room =  robot.brain.get(roomkey)
+      unless room?
+         room = new Room(name, getUserName(msg))
+         robot.brain.set(roomkey, room)
+         robot.brain.save()
+         msg.send "#{getUserName(msg)} created a Room:#{name}"
+         msg.send "Input `ttt room join #{name}` to join the room"
+         return
+      else
+         msg.send "This room has already be created, please try another one or join it"
+         sendHelp robot, msg
+         return
+
+  robot.respond /ttt room join ([a-zA-Z0-9]+)/i, (msg) ->
+      name = msg.match[1]
+      roomkey = getRoomKey(name)
+      room = robot.brain.get(roomkey)
+      unless room?
+          msg.send "Room not exists, please try another one or create by yourself"
+          sendHelp robot, msg
+          return
+      else
+          msg.send "Game started: #{room.creator} VS #{getUserName(msg)}"
+          msg.send "#{room.creator}: X"
+          msg.send "#{getUserName(msg)}: O"
+          room.startWithOpponent(msg, getUserName(msg))
+          robot.brain.set(roomkey, null)
+          robot.brain.set(getRoomGameKey(room.getCreator()), room)
+          robot.brain.set(getRoomGameKey(room.getOpponent()), room)
+          robot.brain.save()
+          return
+
+  robot.respond /ttt room ([1-9])/i, (msg) ->
+
+      cellNum = parseInt(msg.match[1],10)
+      position =
+            x: Math.floor((cellNum - 1) / 3)
+            y: (cellNum - 1) % 3
+
+      room = robot.brain.get(getRoomGameKey(getUserName(msg)))
+      unless room?
+        msg.send "No Tic-Tac-Toe Room Game in progress."
+        sendHelp robot, msg
+        return
+
+      room.mark(position, msg)
+      return
+
+  robot.respond /ttt room stop/i, (msg) ->
+      username = getUserName(msg)
+      room = robot.brain.get(getRoomGameKey(username))
+      if room
+          robot.brain.set(getRoomGameKey(username), null)
+
+          if username == room.getCreator()
+              robot.brain.set(getRoomGameKey(room.getOpponent()), null)
+          else
+              robot.brain.set(getRoomGameKey(room.getCreator()), null)
+
+          robot.brain.save()
+
+      msg.send "#{getUserName(msg)} has stopped a Room Game of Tic-Tac-Toe."
