@@ -389,11 +389,12 @@ BotGame::mark = (position, msg) ->
 
     @game.mark(position, msg)
     if not @game.isGameTerminated()
-        msg.send "Bot`s turn:"
         @botMark(msg)
     return
 
 BotGame::botMark = (msg) ->
+    msg.send "Bot`s turn:"
+
     if @botFirst == @game.isNextFirstHand()
         if @botFirst
             botValue = 'X'
@@ -403,28 +404,36 @@ BotGame::botMark = (msg) ->
             opValue = 'X'
 
         if @markWin(botValue, msg)
+            msg.send "Bot: win"
             return
 
         if @markBlock(opValue, msg)
+            msg.send "Bot: block"
             return
 
         if @markFork(botValue, msg)
+            msg.send "Bot: fork"
             return
 
         if @markBlockFork(opValue, botValue, msg)
+            msg.send "Bot: block fork"
             return
 
         if @markCenter(msg)
+            msg.send "Bot: center"
             return
 
         if @markOppositeCornerOrEmptyCorner(msg)
+            msg.send "Bot: corner"
             return
 
         if @markEmptySide(msg)
+            msg.send "Bot: side"
             return
 
         #====Mark Next Available Cell====
         @markNextAvailable(msg)
+        msg.send "Bot: available"
         #==============================
     return
 
@@ -637,6 +646,7 @@ sendHelp = (robot, msg) ->
   msg.send "#{prefix} ttt room <number> - Mark the Cell"
   msg.send "#{prefix} ttt room stop - Stop the current game of Tic-Tac-Toe"
   msg.send "#{prefix} ttt bot start - Start a game of Tic-Tac-Toe VS #{prefix}"
+  msg.send "#{prefix} ttt bot first - Start a game of Tic-Tac-Toe VS #{prefix} - Bot First"
   msg.send "#{prefix} ttt bot <number> - Mark the Cell"
   msg.send "#{prefix} ttt bot restart - Restart the current game of Tic-Tac-Toe"
   msg.send "#{prefix} ttt bot stop - Stop the current game of Tic-Tac-Toe"
@@ -751,6 +761,19 @@ module.exports = (robot) ->
       else
         msg.send "Tic-Tac-Toe game already in progress."
         sendHelp robot, msg
+
+  robot.respond /ttt bot first/i, (msg) ->
+        botGame = robot.brain.get(getBotGameKey(msg))
+
+        unless botGame?
+          msg.send "#{getUserName(msg)} has started a game of Tic-Tac-Toe VS Bot - Bot first"
+          botGame = new BotGame(true)
+          botGame.startWithMsg(msg)
+          robot.brain.set(getBotGameKey(msg), botGame)
+          robot.brain.save()
+        else
+          msg.send "Tic-Tac-Toe game already in progress."
+          sendHelp robot, msg
 
   robot.respond /ttt bot ([1-9])/i, (msg) ->
       botGame = loadGameManager(robot, getBotGameKey(msg), msg)
