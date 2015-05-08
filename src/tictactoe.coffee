@@ -493,7 +493,7 @@ BotGame::markBlockFork = (opValue, botValue, msg) ->
                             y: aCell.y
                             value: opValue
                         grid.insertCell(opCell)
-                        tmpRows = grid.getGoodCellRows(opCell, 3)
+                        tmpRows = grid.getGoodCellRows(opCell, 2)
                         grid.removeCell(opCell)
                         if tmpRows.length <= 0
                             grid.removeCell(cell)
