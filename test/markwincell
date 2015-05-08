@@ -1,0 +1,56 @@
+tttbot> tttbot ttt bot 7
+-------
+| | | |
+| | | |
+|X| | |
+-------
+Next: O
+Bot`s turn:
+-------
+| | | |
+| | | |
+|X| |O|
+-------
+Next: X
+tttbot> tttbot ttt bot 6
+-------
+| | | |
+| | |X|
+|X| |O|
+-------
+Next: O
+Bot`s turn:
+-------
+| | | |
+| | |X|
+|X|O|O|
+-------
+Next: X
+tttbot> tttbot ttt bot 3
+-------
+| | |X|
+| | |X|
+|X|O|O|
+-------
+Next: O
+Bot`s turn:
+-------
+| | |X|
+| |O|X|
+|X|O|O|
+-------
+Next: X
+tttbot> tttbot ttt bot 1
+-------
+|X| |X|
+| |O|X|
+|X|O|O|
+-------
+Next: O
+-------
+|X|O|X|
+| |O|X|
+|X|O|O|
+-------
+Next: X
+===O WIN!===

@@ -38,6 +38,11 @@ Room = (name, creator) ->
   @game = null
   return
 
+BotGame = (botFirst) ->
+    @botFirst = botFirst
+    @game = null
+    return
+
 Grid::build = ->
   x = 0
   while x < @size
@@ -69,6 +74,59 @@ Grid::eachCell = (callback) ->
     x++
   return
 
+Grid::rows = ->
+    rows = []
+
+    x = 0
+    while x < @size
+        row = []
+        y = 0
+        while y < @size
+            @pushNotNullCell(x, y, row)
+            y++
+        rows.push row
+        x++
+
+    y = 0
+    while y < @size
+        row = []
+        x = 0
+        while x < @size
+            @pushNotNullCell(x, y, row)
+            x++
+        rows.push row
+        y++
+
+    x = 0
+    y = 0
+    row = []
+    while x < @size
+        @pushNotNullCell(x, y, row)
+        x++
+        y = x
+    rows.push row
+
+    x = 0
+    y = @size - 1
+    row = []
+    while x < @size
+        @pushNotNullCell(x, y, row)
+        x++
+        y--
+    rows.push row
+
+    return rows
+
+Grid::pushNotNullCell = (x, y, row) ->
+    if @cells[x][y]
+        row.push @cells[x][y]
+    else
+        cell =
+            x: x
+            y: y
+            value: ' '
+        row.push cell
+
 Grid::cellsAvailable = ->
   return !!@availableCells().length
 
@@ -88,6 +146,10 @@ Grid::insertCell = (cell) ->
   @cells[cell.x][cell.y] = cell
   return
 
+Grid::removeCell = (cell) ->
+    @cells[cell.x][cell.y] = null
+    return
+
 Grid::withinBounds = (position) ->
   return position.x >= 0 and position.x < @size and position.y >= 0 and position.y < @size
 
@@ -97,53 +159,94 @@ Grid::cellGood = (x, y, value) ->
     else
         return true
 
-Grid::winWithCell = (cell) ->
+Grid::getGoodCellRows = (cell, goodCount) ->
+    rows = []
+
     x = cell.x
     y = 0
-    flag = true
+    count = 0
+    row = []
     while y < @size
-        unless @cellGood(x, y, cell.value)
-            flag = false
+        if @cellGood(x, y, cell.value)
+            count++
+        @pushNotNullCell(x, y, row)
         y++
-    if flag
-        return true
+    if count == goodCount
+        rows.push row
 
     x = 0
     y = cell.y
-    flag = true
+    count = 0
+    row = []
     while x < @size
-        unless @cellGood(x, y, cell.value)
-            flag = false
+        if @cellGood(x, y, cell.value)
+            count++
+        @pushNotNullCell(x, y, row)
         x++
-    if flag
-        return true
+    if count == goodCount
+        rows.push row
 
     if cell.x == cell.y
         x = 0
         y = 0
-        flag = true
+        count = 0
+        row = []
         while x < @size
-            unless @cellGood(x, y, cell.value)
-                flag = false
+            if @cellGood(x, y, cell.value)
+                count++
+            @pushNotNullCell(x, y, row)
             x++
             y = x
-    if flag
-        return true
+        if count == goodCount
+            rows.push row
 
     if Math.abs(cell.x - cell.y) == @size - 1 or cell.x == cell.y
         x = 0
         y = @size - 1
-        flag = true
+        count = 0
+        row = []
         while x < @size
-            unless @cellGood(x, y, cell.value)
-                flag = false
+            if @cellGood(x, y, cell.value)
+                count++
+            @pushNotNullCell(x, y, row)
             x++
             y--
-        if flag
-            return true
+        if count == goodCount
+            rows.push row
 
-    return false
+    return rows
 
+Grid::findTwoInRow = (value) ->
+    rows = @rows()
+    ret = []
+    x = 0
+    while x < rows.length
+        if @isTwoInRow(rows[x], value)
+            ret.push rows[x]
+        x++
+    return ret
+
+Grid::isTwoInRow = (row, value) ->
+    countV = 0
+    countE = 0
+    x = 0
+    while x < 3
+        if row[x]
+            if row[x].value == value
+                countV++
+            if row[x].value == ' '
+                countE++
+        x++
+    return countV == 2 and countE == 1
+
+Grid::findFirstAvailableCell = (row) ->
+    if row.length > 0
+        i = 0
+        while i < row.length
+            if row[i].value == ' '
+                return row[i]
+            i++
+    return null
 
 GameManager::setup = ->
   @grid = new Grid(@size)
@@ -152,6 +255,9 @@ GameManager::setup = ->
   @nextX = true
   @actuate()
   return
+
+GameManager::getGrid = ->
+    return @grid
 
 GameManager::getRenderer = ->
   return @renderer
@@ -165,6 +271,12 @@ GameManager::isGameTerminated = ->
   else
     false
 
+GameManager::checkGameTerminated = (msg) ->
+    if @isGameTerminated()
+        msg.send "Game is OVER! Please restart."
+        return true
+    return false
+
 GameManager::actuate = ->
   @renderer.render @grid,
     over: @over,
@@ -176,8 +288,7 @@ GameManager::actuate = ->
 GameManager::mark = (position,msg) ->
   self = this
   @renderer.setMsg(msg)
-  if @isGameTerminated()
-      msg.send "Game is OVER! Please restart."
+  if @checkGameTerminated()
       return
   unless @grid.cellAvailable(position)
     msg.send "Cell not available, please try again."
@@ -191,7 +302,7 @@ GameManager::mark = (position,msg) ->
   @grid.insertCell(newCell)
   @actuate()
 
-  if @grid.winWithCell(newCell)
+  if @grid.getGoodCellRows(newCell, 3).length > 0
       msg.send "===#{newCell.value} WIN!==="
       @won = true
       return
@@ -239,9 +350,6 @@ Room::getCreator = ->
 Room::getOpponent = ->
     return @opponent
 
-Room::getGame = ->
-    return @game
-
 Room::startWithOpponent = (msg, opponent) ->
     @opponent = opponent
     hubotRenderer = new Renderer()
@@ -249,6 +357,8 @@ Room::startWithOpponent = (msg, opponent) ->
     @game = new GameManager(3, hubotRenderer)
 
 Room::mark = (position, msg) ->
+    if @game.checkGameTerminated(msg)
+        return
     name = getUserName(msg)
     if (name == @creator and @game.isNextFirstHand()) or (name == @opponent and not @game.isNextFirstHand())
         @game.mark(position, msg)
@@ -261,6 +371,226 @@ Room::mark = (position, msg) ->
 
     msg.send "It's not your turn! Please wait for #{othername} `s move"
     return
+
+BotGame::startWithMsg = (msg) ->
+    hubotRenderer = new Renderer()
+    hubotRenderer.setMsg msg
+    @game = new GameManager(3, hubotRenderer)
+    if @botFirst
+         @botMark(msg)
+    return
+
+BotGame::mark = (position, msg) ->
+    if @game.checkGameTerminated(msg)
+        return
+    if @botFirst == @game.isNextFirstHand()
+        msg.send "It's not your turn! Please wait for Bot`s move.."
+        return
+
+    @game.mark(position, msg)
+    if not @game.isGameTerminated()
+        msg.send "Bot`s turn:"
+        @botMark(msg)
+    return
+
+BotGame::botMark = (msg) ->
+    if @botFirst == @game.isNextFirstHand()
+        if @botFirst
+            botValue = 'X'
+            opValue = 'O'
+        else
+            botValue = 'O'
+            opValue = 'X'
+
+        if @markWin(botValue, msg)
+            return
+
+        if @markBlock(opValue, msg)
+            return
+
+        if @markFork(botValue, msg)
+            return
+
+        if @markBlockFork(opValue, botValue, msg)
+            return
+
+        if @markCenter(msg)
+            return
+
+        if @markOppositeCornerOrEmptyCorner(msg)
+            return
+
+        if @markEmptySide(msg)
+            return
+
+        #====Mark Next Available Cell====
+        @markNextAvailable(msg)
+        #==============================
+    return
+
+#===========Bot Strategy========
+BotGame::markWin = (botValue, msg) ->
+    rows = @game.getGrid().findTwoInRow(botValue)
+    if rows.length > 0
+        x = 0
+        while x < 3
+            if rows[0][x].value != botValue
+                @game.mark(rows[0][x], msg)
+                return true
+            x++
+    return false
+
+BotGame::markBlock = (opValue, msg) ->
+    return @markWin(opValue, msg)
+
+BotGame::markFork = (botValue, msg) ->
+    grid = @game.getGrid()
+    cells = grid.availableCells()
+    if cells.length > 0
+        i = 0
+        while i < cells.length
+            cell =
+                x: cells[i].x
+                y: cells[i].y
+                value: botValue
+            grid.insertCell(cell)
+            rows = grid.findTwoInRow(botValue)
+            grid.removeCell(cell)
+            if rows.length >= 2
+                @game.mark(cell, msg)
+                return true
+            i++
+    return false
+
+BotGame::markBlockFork = (opValue, botValue, msg) ->
+    grid = @game.getGrid()
+    cells = grid.availableCells()
+    if cells.length > 0
+        i = 0
+        while i < cells.length
+            cell =
+                x: cells[i].x
+                y: cells[i].y
+                value: botValue
+            grid.insertCell(cell)
+            rows = grid.getGoodCellRows(cell, 2)
+            if rows.length > 0
+                j = 0
+                while j < rows.length
+                    aCell = grid.findFirstAvailableCell(rows[j])
+                    if aCell
+                        opCell =
+                            x: aCell.x
+                            y: aCell.y
+                            value: opValue
+                        grid.insertCell(opCell)
+                        tmpRows = grid.getGoodCellRows(opCell, 3)
+                        grid.removeCell(opCell)
+                        if tmpRows.length <= 0
+                            grid.removeCell(cell)
+                            @game.mark(cell, msg)
+                            return true
+                    j++
+            grid.removeCell(cell)
+            i++
+    return false
+
+BotGame::markCenter = (msg) ->
+    center =
+        x: 1
+        y: 1
+    if @game.getGrid().cellAvailable(center)
+        @game.mark(center, msg)
+        return true
+    return false
+
+BotGame::markOppositeCornerOrEmptyCorner = (msg) ->
+    grid = @game.getGrid()
+
+    cellLeftTop =
+        x: 0
+        y: 0
+    cellLeftBottom =
+        x: 2
+        y: 0
+    cellRightTop =
+        x: 0
+        y: 2
+    cellRightBottom =
+        x: 2
+        y: 2
+
+    if grid.cellOccupied(cellLeftTop) and grid.cellAvailable(cellRightBottom)
+        @game.mark(cellRightBottom, msg)
+        return true
+    if grid.cellOccupied(cellLeftBottom) and grid.cellAvailable(cellRightTop)
+        @game.mark(cellRightTop, msg)
+        return true
+    if grid.cellOccupied(cellRightTop) and grid.cellAvailable(cellLeftBottom)
+        @game.mark(cellLeftBottom, msg)
+        return true
+    if grid.cellOccupied(cellRightBottom) and grid.cellAvailable(cellLeftTop)
+        @game.mark(cellLeftTop, msg)
+        return true
+
+    if grid.cellAvailable(cellLeftTop)
+        @game.mark(cellLeftTop, msg)
+        return true
+    if grid.cellAvailable(cellLeftBottom)
+        @game.mark(cellLeftBottom)
+        return true
+    if grid.cellAvailable(cellRightTop)
+        @game.mark(cellRightTop)
+        return true
+    if grid.cellAvailable(cellRightBottom)
+        @game.mark(cellRightBottom)
+        return true
+
+    return false
+
+BotGame::markEmptySide = (msg) ->
+    grid = @game.getGrid()
+
+    cellLeft =
+        x: 1
+        y: 0
+    cellTop =
+        x: 0
+        y: 1
+    cellRight =
+        x: 1
+        y: 2
+    cellBottom =
+        x: 2
+        y: 1
+
+    if grid.cellAvailable(cellLeft)
+        @game.mark(cellLeft, msg)
+        return true
+    if grid.cellAvailable(cellTop)
+        @game.mark(cellTop, msg)
+        return true
+    if grid.cellAvailable(cellRight)
+        @game.mark(cellRight, msg)
+        return true
+    if grid.cellAvailable(cellBottom)
+        @game.mark(cellBottom, msg)
+        return true
+
+    return false
+
+BotGame::markNextAvailable = (msg) ->
+    cells = @game.getGrid().availableCells()
+    if cells.length > 0
+        @game.mark(cells[cells.length - 1], msg)
+        return true
+    else
+        msg.send "NO available cell in Bot`s turn.."
+    return false
+
+#===========Utils=================
+
+#=========================================
 
 getGameKey = (msg) ->
     return "TTTGame" + getUserName(msg)
@@ -279,6 +609,21 @@ getUserName = (msg) ->
     msg.message.user.mention_name
   else
     msg.message.user.name
+
+getPosition = (numberStr) ->
+    cellNum = parseInt(numberStr, 10)
+    position =
+         x: Math.floor((cellNum - 1) / 3)
+         y: (cellNum - 1) % 3
+    return position
+
+loadGameManager = (robot, key, msg) ->
+    gameManager = robot.brain.get(key)
+    unless gameManager?
+      msg.send "No Tic-Tac-Toe game in progress."
+      sendHelp robot, msg
+      return null
+    return gameManager
 
 sendHelp = (robot, msg) ->
   prefix = robot.alias or robot.name
@@ -322,29 +667,15 @@ module.exports = (robot) ->
       sendHelp robot, msg
 
   robot.respond /ttt me ([1-9])/i, (msg) ->
-
-    cellNum = parseInt(msg.match[1],10)
-    position =
-         x: Math.floor((cellNum - 1) / 3)
-         y: (cellNum - 1) % 3
-
-    gameManager = robot.brain.get(getGameKey(msg))
-    unless gameManager?
-      msg.send "No Tic-Tac-Toe game in progress."
-      sendHelp robot, msg
-      return
-
-    gameManager.mark(position, msg)
+    gameManager = loadGameManager(robot, getGameKey(msg), msg)
+    if gameManager
+        gameManager.mark(getPosition(msg.match[1]), msg)
 
   robot.respond /ttt me restart/i, (msg) ->
-    gameManager = robot.brain.get(getGameKey(msg))
-    unless gameManager?
-      msg.send "No Tic-Tac-Toe game in progress."
-      sendHelp robot, msg
-      return
-
-    msg.send "#{getUserName(msg)} has started a game of Tic-Tac-Toe VS #{getUserName(msg)}"
-    gameManager.setup()
+    gameManager = loadGameManager(robot, getGameKey(msg), msg)
+    if gameManager
+        msg.send "#{getUserName(msg)} has started a game of Tic-Tac-Toe VS #{getUserName(msg)}"
+        gameManager.setup()
 
   robot.respond /ttt me stop/i, (msg) ->
     robot.brain.set(getGameKey(msg), null)
@@ -388,19 +719,9 @@ module.exports = (robot) ->
           return
 
   robot.respond /ttt room ([1-9])/i, (msg) ->
-
-      cellNum = parseInt(msg.match[1],10)
-      position =
-            x: Math.floor((cellNum - 1) / 3)
-            y: (cellNum - 1) % 3
-
-      room = robot.brain.get(getRoomGameKey(getUserName(msg)))
-      unless room?
-        msg.send "No Tic-Tac-Toe Room Game in progress."
-        sendHelp robot, msg
-        return
-
-      room.mark(position, msg)
+      room = loadGameManager(robot, getRoomGameKey(getUserName(msg)), msg)
+      if room
+          room.mark(getPosition(msg.match[1]), msg)
       return
 
   robot.respond /ttt room stop/i, (msg) ->
@@ -417,3 +738,33 @@ module.exports = (robot) ->
           robot.brain.save()
 
       msg.send "#{getUserName(msg)} has stopped a Room Game of Tic-Tac-Toe."
+
+  robot.respond /ttt bot start/i, (msg) ->
+      botGame = robot.brain.get(getBotGameKey(msg))
+
+      unless botGame?
+        msg.send "#{getUserName(msg)} has started a game of Tic-Tac-Toe VS Bot"
+        botGame = new BotGame(false)
+        botGame.startWithMsg(msg)
+        robot.brain.set(getBotGameKey(msg), botGame)
+        robot.brain.save()
+      else
+        msg.send "Tic-Tac-Toe game already in progress."
+        sendHelp robot, msg
+
+  robot.respond /ttt bot ([1-9])/i, (msg) ->
+      botGame = loadGameManager(robot, getBotGameKey(msg), msg)
+      if botGame
+          botGame.mark(getPosition(msg.match[1]), msg)
+
+  robot.respond /ttt bot restart/i, (msg) ->
+      botGame = loadGameManager(robot, getBotGameKey(msg), msg)
+      if botGame
+          msg.send "#{getUserName(msg)} has started a game of Tic-Tac-Toe VS Bot"
+          botGame.startWithMsg(msg)
+
+  robot.respond /ttt bot stop/i, (msg) ->
+      robot.brain.set(getBotGameKey(msg), null)
+      robot.brain.save()
+
+      msg.send "#{getUserName(msg)} has stopped a game of Tic-Tac-Toe."

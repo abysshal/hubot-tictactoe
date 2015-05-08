@@ -1,0 +1,28 @@
+tttbot> tttbot ttt bot 1
+-------
+|X| | |
+| | | |
+| | | |
+-------
+Next: O
+Bot`s turn:
+-------
+|X| | |
+| | | |
+| | |O|
+-------
+Next: X
+tttbot> tttbot ttt bot 2
+-------
+|X|X| |
+| | | |
+| | |O|
+-------
+Next: O
+Bot`s turn:
+-------
+|X|X|O|
+| | | |
+| | |O|
+-------
+Next: X
