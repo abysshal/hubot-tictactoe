@@ -2,13 +2,14 @@
 
 This is a TicTacToe game enigne for [Hubot](http://hubot.github.com/)
 
-## Install
+See `doc/*.md` for full documentation.
 
-- git clone https://github.com/abysshal/hubot-tictactoe
+## Installation
+
 - mkdir mybot
 - cd mybot
 - yo hubot
-- npm link ../hubot-tictactoe
+- npm install --save hubot-tictactoe
 - add `hubot-tictactoe` to `external-scripts.json`
 
 
