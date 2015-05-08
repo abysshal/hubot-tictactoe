@@ -69,6 +69,15 @@ bin/hubot
 2. 实现双用户对战模式.
 3. 尝试Bot端游戏策略,实现人机对战.
 
+### 游戏相关名词说明
+
+- 棋子, `X` 或 `O` 标记
+- 方格, 摆放棋子的位置
+- 棋盘 , 3 * 3 的方格
+- 落子, 在某一个方格内放置一个棋子
+- 组, 一个横行/竖列/对角线内的3个空格组成
+
+
 ### 单游戏单用户
 
 此模式主要为了实现并验证游戏框架的正确性,采用单个用户模拟对战双方,轮流输入'X'和'O'来展现对战,并最终结束游戏,得出胜负手.与hubot的交互可以先简单采用`Shell` adapter.
@@ -314,13 +323,219 @@ Room = (name, creator) ->
 由于双方轮流落子且有先后手之分,还需要对双方的落子指令进行判断,只有在自己的回合的落子指令才有效.
 
 
-### Bot游戏策略
+### Bot对战
 
-***TODO***
+在此模式中,用户和Bot轮流落子决出胜负,用户可通过不同指令规定先后手.
+
+#### 数据结构
+
+与单用户模式类似,只是增加了BotGame的定义,用于保存Bot的先后手定义:
+
+```
+BotGame = (botFirst) ->
+    @botFirst = botFirst
+    @game = null
+    return
+```
+
+#### Bot游戏策略
+
+在Bot先手或者用户落子完成且判断游戏还没有结束的情况下,需要调用Bot游戏决策方法,获取下一步Bot落子的位置,最终输出返回给用户.
+
+而根据[wiki](http://en.wikipedia.org/wiki/Tic-tac-toe)上的信息,游戏双方都存在最优策略,所以此处我们便要在Bot游戏决策方法中实现最优策略.
+所谓最优策略,即存在8种落子的方法,从前往后依次做判断,当某一种方法的条件符合时,即采取该方法的落子策略.
+
+1. `Win`, 如果当前棋盘上已经有两个本方的棋子在同一组,则落子在第三个子处即可获取胜利.
+2. `Block`, 如果当前棋盘上已经有两个对手的棋子在同一组,则落子在第三个子处阻止对手在下回合获胜.
+3. `Fork`, 放置一个子使两个组内都有本方两个子而没有对方的子.
+4. `Blocking an opponent's fork`, 放置一个子使得某一组内存在两个本方棋子,而迫使对手在下回合必须放置在该组的第三个子处来阻止本方获胜,但是又不能使对方下回合落子后出现两个组内都存在对方两个棋子的情况.
+5. `Center`, 放置在棋盘中心位置.
+6. `Opposite corner`, 如果对手有棋子在4个角落中,则落子在对手棋子对角线上的角落.
+7. `Empty corner`, 落子在角落.
+8. `Empty side`, 落子在上下左右四条边的中间位置.
+
+#### 实现方法
+
+1. `Win`, 获取当前棋盘上所有的8个组,判断每个组是否存在一个为空白,2个为本方棋子,若有,则落子在空白处.
+2. `Block`, 获取当前棋盘上所有的8个组,判断每个组是否存在一个为空白,2个为对方棋子,若有,则落子在空白处.
+3. `Fork`, 获取当前棋盘上所有空白的方格,逐一尝试,在某个空白方格处放置本方棋子后,获取当前棋盘上所有8个组,判断组内含一个空白,2个本方棋子的组的数量,若大于等于2个组,则落子在当前尝试的方格处.
+4. `Blocking an opponent's fork`, 获取当前棋盘上所有空白的方格,逐一尝试,在某个空白方格处放置本方棋子后,获取跟该方格相关的所有组(2-4个),判断组内含一个空白,2个本方棋子的组的数量,若大于0,则再次逐组尝试,在该组空白方格上放置对手棋子后,获取对手棋子相关的所有组(2-4个),判断组内含一个空白,两个对手棋子的组的数量,若等于0,则落子在本方空白落子处,并返回.
+5. `Center`, 如果中心方格为空白,则落子在中心方格.
+6. `Opposite corner`, 对四个角落逐一判断,若对手棋子在某个角落,而该角落对角线上的角落是空白的,则落子在空白角落.
+7. `Empty corner`, 对四个角落逐一判断,若某个角落是空白的,则落子在该角落.
+8. `Empty side`, 对上下左右四条边的中间位置逐一判断,若某个位置是空白的,则落子在该位置.
+
+***其中方法4. `Blocking an opponent's fork` 还有其他的表述策略, 暂未尝试实现***
+
+
+#### 对战测试
+
+Bot first:
+
+```
+tttbot> tttbot ttt bot first
+Shell has started a game of Tic-Tac-Toe VS Bot - Bot first
+-------
+| | | |
+| | | |
+| | | |
+-------
+Next: X
+Bot`s turn:
+-------
+| | | |
+| |X| |
+| | | |
+-------
+Next: O
+Bot: center
+tttbot> tttbot ttt bot 1
+-------
+|O| | |
+| |X| |
+| | | |
+-------
+Next: X
+Bot`s turn:
+-------
+|O|X| |
+| |X| |
+| | | |
+-------
+Next: O
+Bot: block fork
+tttbot> tttbot ttt bot 8
+-------
+|O|X| |
+| |X| |
+| |O| |
+-------
+Next: X
+Bot`s turn:
+-------
+|O|X| |
+|X|X| |
+| |O| |
+-------
+Next: O
+Bot: block fork
+tttbot> tttbot ttt bot 6
+-------
+|O|X| |
+|X|X|O|
+| |O| |
+-------
+Next: X
+Bot`s turn:
+-------
+|O|X| |
+|X|X|O|
+| |O|X|
+-------
+Next: O
+Bot: corner
+tttbot> tttbot ttt bot 3
+-------
+|O|X|O|
+|X|X|O|
+| |O|X|
+-------
+Next: X
+Bot`s turn:
+-------
+|O|X|O|
+|X|X|O|
+|X|O|X|
+-------
+Next: O
+===Tie!===
+Bot: corner
+```
+
+User first:
+
+```
+tttbot> tttbot ttt bot start
+Shell has started a game of Tic-Tac-Toe VS Bot
+-------
+| | | |
+| | | |
+| | | |
+-------
+Next: X
+tttbot> tttbot ttt bot 5
+-------
+| | | |
+| |X| |
+| | | |
+-------
+Next: O
+Bot`s turn:
+-------
+|O| | |
+| |X| |
+| | | |
+-------
+Next: X
+Bot: corner
+tttbot> tttbot ttt bot 8
+-------
+|O| | |
+| |X| |
+| |X| |
+-------
+Next: O
+Bot`s turn:
+-------
+|O|O| |
+| |X| |
+| |X| |
+-------
+Next: X
+Bot: block
+tttbot> tttbot ttt bot 3
+-------
+|O|O|X|
+| |X| |
+| |X| |
+-------
+Next: O
+Bot`s turn:
+-------
+|O|O|X|
+| |X| |
+|O|X| |
+-------
+Next: X
+Bot: block
+tttbot> tttbot ttt bot 4
+-------
+|O|O|X|
+|X|X| |
+|O|X| |
+-------
+Next: O
+Bot`s turn:
+-------
+|O|O|X|
+|X|X|O|
+|O|X| |
+-------
+Next: X
+Bot: block
+tttbot> tttbot ttt bot 9
+-------
+|O|O|X|
+|X|X|O|
+|O|X|X|
+-------
+Next: O
+===Tie!===
+```
+
 
 ## 其他
 
 - 脚本源码: [hubot-tictactoe](https://github.com/abysshal/hubot-tictactoe)
 - 欢迎上[Slack](http://dreamingfish.slack.com/)在`#general`频道调戏`@hbot`
-
 
